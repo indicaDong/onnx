@@ -20,6 +20,10 @@ def load_card_play_models(card_play_model_path_dict):
             from .perfectdou_agent import PerfectDouAgent
 
             players[position] = PerfectDouAgent(position)
+        elif card_play_model_path_dict[position] == "onnx":
+            from .onnx_agent_v5 import onnxdouAgentV5
+
+            players[position] = onnxdouAgentV5(position)
         elif card_play_model_path_dict[position] == "douzero":
             from .deep_agent import DeepAgent
 
