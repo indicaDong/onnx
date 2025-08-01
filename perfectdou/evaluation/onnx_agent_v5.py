@@ -55,7 +55,7 @@ class onnxdouAgentV5:
         
         # 检查模型的输出名称
         self.output_name = self.model.get_outputs()[0].name
-        print(f"模型输出名称: {self.output_name}")
+
 
     def act(self, infoset):
         if infoset.player_position == "landlord":
