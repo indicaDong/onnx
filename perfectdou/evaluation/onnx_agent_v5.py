@@ -83,7 +83,7 @@ class onnxdouAgentV5:
 
         action = _decode_action(action_id, obs["current_hand"], obs["actions"])
         action = [] if action == "pass" else [RLCard2EnvCard[e] for e in action]
-        print("action:", action)
+        #print("action:", action)
 
         return self.find_sublist_index(infoset.legal_actions, action)
 
