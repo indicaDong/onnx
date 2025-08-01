@@ -10,13 +10,13 @@ from perfectdou.env.game import bombs
 
 
 def _load_model(position):
-    model_dir = "{}/../model/onnx_v7_fixed".format(os.path.dirname(__file__))
+    model_dir = "{}/../model/perfectdou".format(os.path.dirname(__file__))
     sess_options = ort.SessionOptions()
     sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
     sess_options.inter_op_num_threads = 1
     sess_options.intra_op_num_threads = 1
     sess_options.log_severity_level = 3
-    return ort.InferenceSession("{}/{}_v7.onnx".format(model_dir, position), sess_options)
+    return ort.InferenceSession("{}/{}.onnx".format(model_dir, position), sess_options)
 
 
 RLCard2EnvCard = {
@@ -45,7 +45,7 @@ class onnxdouAgentV5:
         self.bomb_num = 0
         self.control = 0
         self.have_bomb = 0
-        self.num_tta_runs = 10
+        self.num_tta_runs = 5
         self.use_noise = True
         self.use_dropout = True
         self.noise_scale = 0.02
@@ -53,39 +53,69 @@ class onnxdouAgentV5:
         
 
         
-        # 检查模型的输出名称
+
         self.output_name = self.model.get_outputs()[0].name
 
 
     def act(self, infoset):
+        
+
         if infoset.player_position == "landlord":
             obs = encode_obs_landlord(infoset)
+
+            infoset_new = infoset
+            obs1 = encode_obs_landlord(infoset)
+
+            infoset_new.player_position = "landlord_up"
+            obs2 = encode_obs_peasant(infoset)
+
         elif infoset.player_position == "landlord_up":
             obs = encode_obs_peasant(infoset)
+            obs1 = encode_obs_landlord(infoset)
+            obs2 = encode_obs_peasant(infoset)
+
         elif infoset.player_position == "landlord_down":
             obs = encode_obs_peasant(infoset)
+            obs1 = encode_obs_landlord(infoset)
+            obs2 = encode_obs_peasant(infoset)
+        
+    
         input_name = self.model.get_inputs()[0].name
+        input_data1 = np.concatenate(
+            [obs1["x_no_action"].flatten(), obs1["legal_actions_arr"].flatten()]
+        ).reshape(1, -1).astype(np.float32)
+
+
+        input_data2 = np.concatenate(
+            [obs2["x_no_action"].flatten(), obs2["legal_actions_arr"].flatten()]
+        ).reshape(1, -1).astype(np.float32)
+
+
         input_data = np.concatenate(
             [obs["x_no_action"].flatten(), obs["legal_actions_arr"].flatten()]
         ).reshape(1, -1).astype(np.float32)
 
         use_randomization = self.use_noise or self.use_dropout
         all_results = []
-        for i in range(self.num_tta_runs):
-
-            current_input = input_data
-            logit = self.model.run([self.output_name], {input_name: current_input})
-
+        if self.position == "landlord":
+            for i in [input_data1, input_data2, input_data]:
+                current_input = i
+                logit = self.model.run([self.output_name], {input_name: current_input})
             all_results.append(logit[0])
+        else:
+            for i in [input_data1, input_data2]:
+                current_input = i
+                logit = self.model.run([self.output_name], {input_name: current_input})
+            all_results.append(logit[0])
+
         averaged_result = np.mean(all_results, axis=0)
         action_id = np.argmax(averaged_result)
 
 
         action = _decode_action(action_id, obs["current_hand"], obs["actions"])
         action = [] if action == "pass" else [RLCard2EnvCard[e] for e in action]
-        #print("action:", action)
-
-        return self.find_sublist_index(infoset.legal_actions, action)
+        
+        return action
 
     def act_with_details(self, infoset):
         """返回包含详细logit信息的字典"""
